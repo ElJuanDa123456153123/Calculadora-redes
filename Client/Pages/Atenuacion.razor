@@ -1,0 +1,135 @@
+@using CalculadoraRedes.Client.Services
+
+@page "/Atenuacion"
+@using System.Globalization
+@inject HistorialService HistorialService
+
+<h3>Calculadora de Atenuación</h3>
+
+<div>
+    <label>Potencia de transmisión OLT:</label>
+    <select @bind="potenciaOLTSeleccion">
+        <option value="3">3 dBm</option>
+        <option value="4">4 dBm</option>
+        <option value="5">5 dBm</option>
+        <option value="otro">Otro..</option>
+    </select>
+
+    @if (potenciaOLTSeleccion == "otro")
+    {
+        <input type="number" step="0.1" @bind="potenciaOLTManual" placeholder="Ingresa potencia (dBm)" />
+    }
+</div>
+
+<div>
+    <label>Splitters:</label>
+    @foreach (var item in splitterSeleccionados)
+    {
+        <div>
+            <select @bind="item.Valor">
+                <option disabled selected value="0">Selecciona un Splitter</option>
+                <option value="3.6">1:2 (3.6 dB)</option>
+                <option value="7.2">1:4 (7.2 dB)</option>
+                <option value="11">1:8 (11 dB)</option>
+                <option value="14">1:16 (14 dB)</option>
+                <option value="17.5">1:32 (17.5 dB)</option>
+            </select>
+            <button @onclick="() => EliminarSplitter(item)">❌</button>
+        </div>
+    }
+    <button @onclick="AgregarSplitter">➕</button>
+</div>
+
+<div>
+    <label>Fusiones:</label>
+    <input @bind="fusiones" type="number" min="0" />
+</div>
+<div>
+    <label>Acopladores:</label>
+    <input @bind="acopladores" type="number" min="0" />
+</div>
+<div>
+    <label>Longitud del cable (m):</label>
+    <input @bind="longitud" type="number" min="0" />
+</div>
+
+<button @onclick="CalcularAtenuacion">Calcular</button>
+
+@if (resultado != null)
+{
+    <p><strong>Atenuación total:</strong> @($"{resultado:F2}") dB</p>
+    <p><strong>Potencia de recepción:</strong> @($"{(ObtenerPotenciaOLT() - resultado.Value):F2}") dBm</p>
+}
+
+@code {
+    class SplitterSeleccionado
+    {
+        public string Valor { get; set; } = "0";
+    }
+
+    List<SplitterSeleccionado> splitterSeleccionados = new() { new SplitterSeleccionado() };
+
+    int fusiones = 0;
+    int acopladores = 0;
+    double longitud = 0;
+
+    string potenciaOLTSeleccion = "3";
+    double? potenciaOLTManual = null;
+    double? resultado = null;
+
+    void AgregarSplitter()
+    {
+        splitterSeleccionados.Add(new SplitterSeleccionado());
+    }
+
+    void EliminarSplitter(SplitterSeleccionado splitter)
+    {
+        if (splitterSeleccionados.Count > 1)
+        {
+            splitterSeleccionados.Remove(splitter);
+        }
+    }
+
+    double ObtenerPotenciaOLT()
+    {
+        if (potenciaOLTSeleccion == "otro")
+        {
+            return potenciaOLTManual ?? 0;
+        }
+
+        return double.Parse(potenciaOLTSeleccion, CultureInfo.InvariantCulture);
+    }
+
+    void CalcularAtenuacion()
+    {
+        double totalSplitters = 0;
+
+        foreach (var splitter in splitterSeleccionados)
+        {
+            if (double.TryParse(splitter.Valor, NumberStyles.Float, CultureInfo.InvariantCulture, out double valor))
+            {
+                totalSplitters += valor;
+            }
+        }
+
+        double AtenuacionFusiones = fusiones * 0.03;
+        double AtenuacionAcopladores = acopladores * 0.5;
+        double AtenuacionFibra = (longitud / 1000) * 0.2;
+
+        double total = AtenuacionFusiones + AtenuacionAcopladores + AtenuacionFibra + totalSplitters;
+
+        resultado = Math.Round(total, 2);
+
+        double PotenciaRecibida = ObtenerPotenciaOLT() - resultado.Value;
+
+        HistorialService.Agregar(new CalculoAtenuacion
+        {
+            totalSplitters = totalSplitters,
+            Fusiones = fusiones,
+            Acopladores = acopladores,
+            LongitudCable = longitud,
+            AtenuacionTotal = total,
+            PotenciaRecibida = PotenciaRecibida
+        });
+    }
+}

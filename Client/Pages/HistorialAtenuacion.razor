@@ -1,0 +1,43 @@
+@using CalculadoraRedes.Client.Services
+
+@page "/historial"
+@inject HistorialService HistorialService
+
+<h3>Historial de cálculos</h3>
+
+@if (!HistorialService.Historial.Any())
+{
+    <p>No hay cálculos registrados.</p>
+}
+else
+{
+    <button @onclick="LimpiarHistorial">🗑️ Limpiar historial</button>
+
+    <ul>
+        @foreach (var (item, index) in HistorialService.Historial.Select((value, i) => (value, i)))
+        {
+            <li style="margin-bottom: 1rem;">
+                <div>Splitters: @($"{item.totalSplitters:F2} dB")</div>
+                <div>Fusiones: @($"{item.AtenuacionFusiones:F2} dB") (@($"{item.Fusiones} x 0.03"))</div>
+                <div>Acopladores: @($"{item.AtenuacionAcopladores:F2} dB") (@($"{item.Acopladores} x 0.5"))</div>
+                <div>Fibra óptica: @($"{item.AtenuacionFibra:F2} dB") (@($"{item.LongitudCable}/1000 x 0.2 dB"))</div>
+                <strong>Atenuación total:</strong> @($"{item.AtenuacionTotal:F2} dB") <br />
+                <strong>Potencia recibida:</strong> @($"{item.PotenciaRecibida:F2} dBm") <br />
+                <button @onclick="@(() => EliminarItem(index))">❌ Eliminar</button>
+            </li>
+            <hr />
+        }
+    </ul>
+}
+
+@code {
+    void EliminarItem(int index)
+    {
+        HistorialService.Eliminar(index);
+    }
+    void LimpiarHistorial()
+    {
+        HistorialService.Limpiar();
+        StateHasChanged();
+    }
+}
