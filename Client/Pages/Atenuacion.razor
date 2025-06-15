@@ -1,8 +1,12 @@
-@using CalculadoraRedes.Client.Services
-
 @page "/Atenuacion"
 @using System.Globalization
-@inject HistorialService HistorialService
+@using Blazored.LocalStorage
+@using CalculadoraRedes.Client.Models
+
+
+
+@inject ILocalStorageService LocalStorage
+@inject CalculadoraRedes.Client.Services.HistorialService HistorialService
 
 <h3>Calculadora de Atenuación</h3>
 
@@ -21,38 +25,76 @@
     }
 </div>
 
-<div>
-    <label>Splitters:</label>
-    @foreach (var item in splitterSeleccionados)
+<hr />
+
+<!-- CONTENEDOR DE BLOQUES -->
+<div style="display: flex; flex-wrap: wrap; gap: 16px;">
+
+    @foreach (var bloque in bloques)
     {
-        <div>
-            <select @bind="item.Valor">
-                <option disabled selected value="0">Selecciona un Splitter</option>
-                <option value="3.6">1:2 (3.6 dB)</option>
-                <option value="7.2">1:4 (7.2 dB)</option>
-                <option value="11">1:8 (11 dB)</option>
-                <option value="14">1:16 (14 dB)</option>
-                <option value="17.5">1:32 (17.5 dB)</option>
-            </select>
-            <button @onclick="() => EliminarSplitter(item)">❌</button>
+        <div style="
+            border: 1px solid gray;
+            padding: 10px;
+            border-radius: 10px;
+            width: 250px;
+            box-shadow: 2px 2px 6px rgba(0,0,0,0.1);
+            background-color: #f9f9f9;
+        ">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h4>Bloque</h4>
+                <button title="Eliminar bloque" @onclick="@(() => EliminarBloque(bloque))" style="background: none; border: none; font-size: 18px; cursor: pointer;">❌</button>
+            </div>
+
+            <label>Splitters:</label>
+            @foreach (var item in bloque.Splitters)
+            {
+                <div>
+                    <select @bind="item.Valor" style="width: 100%;">
+                        <option disabled selected value="0">Selecciona un Splitter</option>
+                        <option value="3.6">1:2 (3.6 dB)</option>
+                        <option value="7.2">1:4 (7.2 dB)</option>
+                        <option value="11">1:8 (11 dB)</option>
+                        <option value="14">1:16 (14 dB)</option>
+                        <option value="17.5">1:32 (17.5 dB)</option>
+                    </select>
+                    <button @onclick="@(() => EliminarSplitter(bloque, item))">❌</button>
+                </div>
+            }
+            <button @onclick="@(() => AgregarSplitter(bloque))">➕</button>
+
+            <div>
+                <label>Fusiones:</label>
+                <input type="number" min="0" @bind="bloque.Fusiones" style="width: 100%;" />
+            </div>
+            <div>
+                <label>Acopladores:</label>
+                <input type="number" min="0" @bind="bloque.Acopladores" style="width: 100%;" />
+            </div>
+            <div>
+                <label>Longitud del cable (m):</label>
+                <input type="number" min="0" @bind="bloque.Longitud" style="width: 100%;" />
+            </div>
         </div>
     }
-    <button @onclick="AgregarSplitter">➕</button>
+
+    <!-- BOTÓN PARA AGREGAR BLOQUE -->
+    <div style="
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 250px;
+        height: 180px;
+        border: 2px dashed gray;
+        border-radius: 10px;
+     
+    using CalculadoraRedes.Client.Services;
+#line default
+" @onclick="AgregarBloque">
+        ➕
+    </div>
 </div>
 
-<div>
-    <label>Fusiones:</label>
-    <input @bind="fusiones" type="number" min="0" />
-</div>
-<div>
-    <label>Acopladores:</label>
-    <input @bind="acopladores" type="number" min="0" />
-</div>
-<div>
-    <label>Longitud del cable (m):</label>
-    <input @bind="longitud" type="number" min="0" />
-</div>
-
+<br />
 <button @onclick="CalcularAtenuacion">Calcular</button>
 
 @if (resultado != null)
@@ -62,31 +104,57 @@
 }
 
 @code {
-    class SplitterSeleccionado
-    {
-        public string Valor { get; set; } = "0";
-    }
-
-    List<SplitterSeleccionado> splitterSeleccionados = new() { new SplitterSeleccionado() };
-
-    int fusiones = 0;
-    int acopladores = 0;
-    double longitud = 0;
+    List<BloqueAtenuacion> bloques = new() { new BloqueAtenuacion() };
 
     string potenciaOLTSeleccion = "3";
     double? potenciaOLTManual = null;
     double? resultado = null;
 
-    void AgregarSplitter()
+    protected override async Task OnInitializedAsync()
     {
-        splitterSeleccionados.Add(new SplitterSeleccionado());
+        var datosGuardados = await LocalStorage.GetItemAsync<List<BloqueAtenuacion>>("bloques");
+        var potenciaGuardada = await LocalStorage.GetItemAsync<string>("potenciaOLT");
+        var potenciaManual = await LocalStorage.GetItemAsync<double?>("potenciaManual");
+
+        if (datosGuardados != null) bloques = datosGuardados;
+        if (potenciaGuardada != null) potenciaOLTSeleccion = potenciaGuardada;
+        if (potenciaManual != null) potenciaOLTManual = potenciaManual;
     }
 
-    void EliminarSplitter(SplitterSeleccionado splitter)
+    async Task GuardarEnLocalStorage()
     {
-        if (splitterSeleccionados.Count > 1)
+        await LocalStorage.SetItemAsync("bloques", bloques);
+        await LocalStorage.SetItemAsync("potenciaOLT", potenciaOLTSeleccion);
+        await LocalStorage.SetItemAsync("potenciaManual", potenciaOLTManual);
+    }
+
+    async Task AgregarBloque()
+    {
+        bloques.Add(new BloqueAtenuacion());
+        await GuardarEnLocalStorage();
+    }
+
+    async Task AgregarSplitter(BloqueAtenuacion bloque)
+    {
+        bloque.Splitters.Add(new SplitterSeleccionado());
+        await GuardarEnLocalStorage();
+    }
+
+    async Task EliminarSplitter(BloqueAtenuacion bloque, SplitterSeleccionado splitter)
+    {
+        if (bloque.Splitters.Count > 1)
         {
-            splitterSeleccionados.Remove(splitter);
+            bloque.Splitters.Remove(splitter);
+            await GuardarEnLocalStorage();
+        }
+    }
+
+    async Task EliminarBloque(BloqueAtenuacion bloque)
+    {
+        if (bloques.Count > 1)
+        {
+            bloques.Remove(bloque);
+            await GuardarEnLocalStorage();
         }
     }
 
@@ -100,11 +168,18 @@
         return double.Parse(potenciaOLTSeleccion, CultureInfo.InvariantCulture);
     }
 
-    void CalcularAtenuacion()
-    {
-        double totalSplitters = 0;
+async Task CalcularAtenuacion()
+{
+    double total = 0;
 
-        foreach (var splitter in splitterSeleccionados)
+    double totalSplitters = 0;
+    double totalFusiones = 0;
+    double totalAcopladores = 0;
+    double totalLongitud = 0;
+
+    foreach (var bloque in bloques)
+    {
+        foreach (var splitter in bloque.Splitters)
         {
             if (double.TryParse(splitter.Valor, NumberStyles.Float, CultureInfo.InvariantCulture, out double valor))
             {
@@ -112,24 +187,35 @@
             }
         }
 
-        double AtenuacionFusiones = fusiones * 0.03;
-        double AtenuacionAcopladores = acopladores * 0.5;
-        double AtenuacionFibra = (longitud / 1000) * 0.2;
-
-        double total = AtenuacionFusiones + AtenuacionAcopladores + AtenuacionFibra + totalSplitters;
-
-        resultado = Math.Round(total, 2);
-
-        double PotenciaRecibida = ObtenerPotenciaOLT() - resultado.Value;
-
-        HistorialService.Agregar(new CalculoAtenuacion
-        {
-            totalSplitters = totalSplitters,
-            Fusiones = fusiones,
-            Acopladores = acopladores,
-            LongitudCable = longitud,
-            AtenuacionTotal = total,
-            PotenciaRecibida = PotenciaRecibida
-        });
+        totalFusiones += bloque.Fusiones;
+        totalAcopladores += bloque.Acopladores;
+        totalLongitud += bloque.Longitud;
+    
     }
+
+    double atenuacionFusiones = totalFusiones * 0.03;
+    double atenuacionAcopladores = totalAcopladores * 0.5;
+    double atenuacionFibra = (totalLongitud / 1000) * 0.2;
+
+    total = totalSplitters + atenuacionFusiones + atenuacionAcopladores + atenuacionFibra;
+
+    resultado = Math.Round(total, 2);
+
+    await GuardarEnLocalStorage();
+
+    // 🔽 Aquí se guarda en el historial
+    HistorialService.Agregar(new CalculoAtenuacion
+    {
+        totalSplitters = totalSplitters,
+        Fusiones = totalFusiones,
+        Acopladores = totalAcopladores,
+        LongitudCable = totalLongitud,
+        AtenuacionFusiones = atenuacionFusiones,
+        AtenuacionAcopladores = atenuacionAcopladores,
+        AtenuacionFibra = atenuacionFibra,
+        AtenuacionTotal = resultado.Value,
+        PotenciaRecibida = ObtenerPotenciaOLT() - resultado.Value
+    });
+}
+    
 }
